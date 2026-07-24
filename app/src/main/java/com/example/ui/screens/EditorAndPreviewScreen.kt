@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
@@ -65,6 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pdf.PdfShareManager
 import com.example.ui.components.MarkdownToolbar
 import com.example.ui.components.PdfDocumentPagePreview
+import com.example.ui.dialogs.OcrScanDialog
 import com.example.ui.dialogs.PdfConfigDialog
 import com.example.ui.viewmodel.DocumentViewModel
 import com.example.ui.viewmodel.PdfEngine
@@ -90,6 +92,7 @@ fun EditorAndPreviewScreen(
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Editor, 1 = PDF Sheet Preview
     var showConfigDialog by remember { mutableStateOf(false) }
+    var showOcrDialog by remember { mutableStateOf(false) }
 
     // SAF Create Document Launcher (Pick folder/file destination)
     val createDocumentLauncher = rememberLauncherForActivityResult(
@@ -129,6 +132,14 @@ fun EditorAndPreviewScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showOcrDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.DocumentScanner,
+                            contentDescription = "Camera OCR Scanner",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
                     IconButton(onClick = { showConfigDialog = true }) {
                         Icon(Icons.Default.Settings, contentDescription = "PDF Page Config")
                     }
@@ -240,7 +251,8 @@ fun EditorAndPreviewScreen(
                                     selection = TextRange(newCursorPos)
                                 )
                                 viewModel.updateActiveContent(newText)
-                            }
+                            },
+                            onOpenOcrScanner = { showOcrDialog = true }
                         )
 
                         // Code Editor Input Area
@@ -280,6 +292,34 @@ fun EditorAndPreviewScreen(
                 }
             }
         }
+    }
+
+    if (showOcrDialog) {
+        OcrScanDialog(
+            onDismiss = { showOcrDialog = false },
+            onInsertText = { extractedText, appendAtEnd ->
+                val currentText = editorTextState.text
+                if (appendAtEnd) {
+                    val newText = if (currentText.isBlank()) extractedText else "$currentText\n\n$extractedText"
+                    editorTextState = TextFieldValue(
+                        text = newText,
+                        selection = TextRange(newText.length)
+                    )
+                    viewModel.updateActiveContent(newText)
+                } else {
+                    val sel = editorTextState.selection
+                    val before = currentText.substring(0, sel.min)
+                    val after = currentText.substring(sel.max)
+                    val newText = if (before.endsWith("\n") || before.isEmpty()) "$before$extractedText\n$after" else "$before\n$extractedText\n$after"
+                    val newPos = sel.min + extractedText.length + 1
+                    editorTextState = TextFieldValue(
+                        text = newText,
+                        selection = TextRange(newPos)
+                    )
+                    viewModel.updateActiveContent(newText)
+                }
+            }
+        )
     }
 
     if (showConfigDialog) {

@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.FormatListNumbered
@@ -32,6 +34,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun MarkdownToolbar(
     onInsertText: (prefix: String, suffix: String) -> Unit,
+    onOpenOcrScanner: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -47,6 +50,18 @@ fun MarkdownToolbar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (onOpenOcrScanner != null) {
+                // OCR Camera & Image Scan
+                AssistChip(
+                    onClick = { onOpenOcrScanner() },
+                    label = { Text("Camera OCR", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold) },
+                    leadingIcon = { Icon(Icons.Default.DocumentScanner, contentDescription = "OCR Scan", tint = MaterialTheme.colorScheme.primary) },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                )
+            }
+
             // Heading 1
             AssistChip(
                 onClick = { onInsertText("# ", "") },

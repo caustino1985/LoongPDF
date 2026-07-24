@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.MoreVert
@@ -98,6 +99,7 @@ fun DocumentListScreen(
 
     val context = LocalContext.current
     var showNewDocDialog by remember { mutableStateOf(false) }
+    var showCloudSyncDialog by remember { mutableStateOf(false) }
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
 
     val categories = listOf("All", "Technical", "Report", "Resume", "General")
@@ -189,6 +191,9 @@ fun DocumentListScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { showCloudSyncDialog = true }) {
+                            Icon(Icons.Default.Cloud, contentDescription = "Cloud Sync & Import", tint = MaterialTheme.colorScheme.primary)
+                        }
                         IconButton(onClick = { viewModel.toggleSelectionMode(true) }) {
                             Icon(Icons.Default.Checklist, contentDescription = "Multi-select Documents")
                         }
@@ -425,6 +430,13 @@ fun DocumentListScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    if (showCloudSyncDialog) {
+        CloudSyncDialog(
+            viewModel = viewModel,
+            onDismiss = { showCloudSyncDialog = false }
         )
     }
 

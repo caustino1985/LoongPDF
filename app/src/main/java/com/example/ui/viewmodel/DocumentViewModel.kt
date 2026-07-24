@@ -15,6 +15,8 @@ import com.example.pdf.HtmlDocumentConverter
 import com.example.pdf.PdfExportConfig
 import com.example.pdf.PdfPageRenderer
 import com.example.pdf.WebViewPdfGenerator
+import com.example.cloud.CloudImportManager
+import com.example.cloud.FirestoreSyncService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -82,6 +84,143 @@ class DocumentViewModel(application: Application) : AndroidViewModel(application
     // Custom Export Directory URI
     private val _customExportFolderUri = MutableStateFlow<Uri?>(null)
     val customExportFolderUri: StateFlow<Uri?> = _customExportFolderUri
+
+    // Cloud Sync & Import State
+    private val _userVaultId = MutableStateFlow("my_personal_vault")
+    val userVaultId: StateFlow<String> = _userVaultId
+
+    private val _isCloudSyncing = MutableStateFlow(false)
+    val isCloudSyncing: StateFlow<Boolean> = _isCloudSyncing
+
+    private val _cloudSyncStatus = MutableStateFlow<String?>("Cloud sync ready")
+    val cloudSyncStatus: StateFlow<String?> = _cloudSyncStatus
+
+    fun setUserVaultId(id: String) {
+        _userVaultId.value = id
+    }
+
+    fun backupToFirestore(context: Context, onResult: (Boolean, String) -> Unit) {
+        _isCloudSyncing.value = true
+        _cloudSyncStatus.value = "Backing up documents to Firestore..."
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val service = FirestoreSyncService(context)
+            val result = service.backupToFirestore(_userVaultId.value, allDocuments.value)
+
+            withContext(Dispatchers.Main) {
+                _isCloudSyncing.value = false
+                result.fold(
+                    onSuccess = { count ->
+                        val msg = "Successfully backed up $count document(s) to Firestore Cloud."
+                        _cloudSyncStatus.value = msg
+                        onResult(true, msg)
+                    },
+                    onFailure = { error ->
+                        val msg = "Backup failed: ${error.localizedMessage ?: "Unknown error"}"
+                        _cloudSyncStatus.value = msg
+                        onResult(false, msg)
+                    }
+                )
+            }
+        }
+    }
+
+    fun restoreFromFirestore(context: Context, onResult: (Boolean, String) -> Unit) {
+        _isCloudSyncing.value = true
+        _cloudSyncStatus.value = "Fetching backup from Firestore..."
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val service = FirestoreSyncService(context)
+            val result = service.restoreFromFirestore(_userVaultId.value)
+
+            withContext(Dispatchers.Main) {
+                _isCloudSyncing.value = false
+                result.fold(
+                    onSuccess = { docs ->
+                        viewModelScope.launch(Dispatchers.IO) {
+                            var restoredCount = 0
+                            for (doc in docs) {
+                                repository.saveDocument(doc)
+                                restoredCount++
+                            }
+                            withContext(Dispatchers.Main) {
+                                val msg = "Restored $restoredCount document(s) from Firestore Cloud!"
+                                _cloudSyncStatus.value = msg
+                                onResult(true, msg)
+                            }
+                        }
+                    },
+                    onFailure = { error ->
+                        val msg = "Restore failed: ${error.localizedMessage ?: "Unknown error"}"
+                        _cloudSyncStatus.value = msg
+                        onResult(false, msg)
+                    }
+                )
+            }
+        }
+    }
+
+    fun importFromUri(context: Context, uri: Uri, onResult: (Boolean, String) -> Unit) {
+        _isCloudSyncing.value = true
+        _cloudSyncStatus.value = "Importing file from storage provider..."
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = CloudImportManager.importFromUri(context, uri)
+
+            withContext(Dispatchers.Main) {
+                _isCloudSyncing.value = false
+                result.fold(
+                    onSuccess = { doc ->
+                        viewModelScope.launch(Dispatchers.IO) {
+                            val id = repository.saveDocument(doc)
+                            withContext(Dispatchers.Main) {
+                                val msg = "Successfully imported '${doc.title}' into library!"
+                                _cloudSyncStatus.value = msg
+                                selectDocument(doc.copy(id = id))
+                                onResult(true, msg)
+                            }
+                        }
+                    },
+                    onFailure = { error ->
+                        val msg = "Import failed: ${error.localizedMessage ?: "Invalid file"}"
+                        _cloudSyncStatus.value = msg
+                        onResult(false, msg)
+                    }
+                )
+            }
+        }
+    }
+
+    fun importFromCloudUrl(url: String, onResult: (Boolean, String) -> Unit) {
+        _isCloudSyncing.value = true
+        _cloudSyncStatus.value = "Downloading document from Cloud link..."
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = CloudImportManager.importFromCloudUrl(url)
+
+            withContext(Dispatchers.Main) {
+                _isCloudSyncing.value = false
+                result.fold(
+                    onSuccess = { doc ->
+                        viewModelScope.launch(Dispatchers.IO) {
+                            val id = repository.saveDocument(doc)
+                            withContext(Dispatchers.Main) {
+                                val msg = "Successfully imported '${doc.title}' from Cloud link!"
+                                _cloudSyncStatus.value = msg
+                                selectDocument(doc.copy(id = id))
+                                onResult(true, msg)
+                            }
+                        }
+                    },
+                    onFailure = { error ->
+                        val msg = "Cloud link import failed: ${error.localizedMessage ?: "Unable to fetch content"}"
+                        _cloudSyncStatus.value = msg
+                        onResult(false, msg)
+                    }
+                )
+            }
+        }
+    }
 
     // PDF Export State
     private val _isExporting = MutableStateFlow(false)

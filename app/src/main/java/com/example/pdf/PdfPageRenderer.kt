@@ -326,6 +326,323 @@ object PdfPageRenderer {
         return pdfFile
     }
 
+    fun generateMergedPdf(
+        context: Context,
+        bundleTitle: String,
+        docItems: List<Pair<String, List<MarkdownElement>>>,
+        config: PdfExportConfig
+    ): File {
+        val (pageWidth, pageHeight) = config.getDimensions()
+        val pdfDocument = PdfDocument()
+
+        val margin = config.marginPt
+        val contentWidth = pageWidth - (margin * 2)
+        val maxY = pageHeight - margin - 30f
+
+        var pageNum = 1
+        var pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
+        var page = pdfDocument.startPage(pageInfo)
+        var canvas = page.canvas
+
+        var yPos = margin + 20f
+
+        val primaryColor = config.parsePrimaryColor()
+
+        val titlePaint = Paint().apply {
+            color = primaryColor
+            textSize = config.baseFontSize * 2.2f
+            isFakeBoldText = true
+            isAntiAlias = true
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        }
+
+        val h1Paint = Paint().apply {
+            color = primaryColor
+            textSize = config.baseFontSize * 1.6f
+            isFakeBoldText = true
+            isAntiAlias = true
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        }
+
+        val h2Paint = Paint().apply {
+            color = primaryColor
+            textSize = config.baseFontSize * 1.35f
+            isFakeBoldText = true
+            isAntiAlias = true
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        }
+
+        val h3Paint = Paint().apply {
+            color = Color.parseColor("#334155")
+            textSize = config.baseFontSize * 1.15f
+            isFakeBoldText = true
+            isAntiAlias = true
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        }
+
+        val bodyPaint = Paint().apply {
+            color = Color.parseColor("#1E293B")
+            textSize = config.baseFontSize
+            isAntiAlias = true
+            typeface = Typeface.DEFAULT
+        }
+
+        val boldPaint = Paint().apply {
+            color = Color.parseColor("#0F172A")
+            textSize = config.baseFontSize
+            isFakeBoldText = true
+            isAntiAlias = true
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+
+        val italicPaint = Paint().apply {
+            color = Color.parseColor("#334155")
+            textSize = config.baseFontSize
+            isAntiAlias = true
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+        }
+
+        val codePaint = Paint().apply {
+            color = Color.parseColor("#0F172A")
+            textSize = config.baseFontSize * 0.9f
+            isAntiAlias = true
+            typeface = Typeface.MONOSPACE
+        }
+
+        val metaPaint = Paint().apply {
+            color = Color.parseColor("#64748B")
+            textSize = config.baseFontSize * 0.85f
+            isAntiAlias = true
+        }
+
+        val linePaint = Paint().apply {
+            color = Color.parseColor("#CBD5E1")
+            strokeWidth = 1f
+            style = Paint.Style.STROKE
+        }
+
+        val bgBoxPaint = Paint().apply {
+            color = Color.parseColor("#F1F5F9")
+            style = Paint.Style.FILL
+        }
+
+        val quoteBorderPaint = Paint().apply {
+            color = primaryColor
+            strokeWidth = 3f
+            style = Paint.Style.STROKE
+        }
+
+        fun drawHeaderFooter(c: Canvas, pNum: Int) {
+            if (config.headerText.isNotEmpty()) {
+                c.drawText(config.headerText, margin, margin - 10f, metaPaint)
+                c.drawLine(margin, margin - 5f, pageWidth - margin, margin - 5f, linePaint)
+            }
+
+            val footerY = pageHeight - margin + 15f
+            c.drawLine(margin, footerY - 10f, pageWidth - margin, footerY - 10f, linePaint)
+            c.drawText(config.footerText, margin, footerY, metaPaint)
+
+            if (config.showPageNumbers) {
+                val pageText = "Page $pNum"
+                val pWidth = metaPaint.measureText(pageText)
+                c.drawText(pageText, pageWidth - margin - pWidth, footerY, metaPaint)
+            }
+        }
+
+        fun checkAndNextPage(requiredHeight: Float) {
+            if (yPos + requiredHeight > maxY) {
+                drawHeaderFooter(canvas, pageNum)
+                pdfDocument.finishPage(page)
+
+                pageNum++
+                pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
+                page = pdfDocument.startPage(pageInfo)
+                canvas = page.canvas
+                yPos = margin + 20f
+            }
+        }
+
+        // Draw Cover Title
+        canvas.drawText(bundleTitle, margin, yPos, titlePaint)
+        yPos += config.baseFontSize * 2.5f
+
+        val coverMeta = "Merged Collection (${docItems.size} Documents) | Author: ${config.author}"
+        canvas.drawText(coverMeta, margin, yPos, metaPaint)
+        yPos += config.baseFontSize * 1.5f
+        canvas.drawLine(margin, yPos, pageWidth - margin, yPos, linePaint)
+        yPos += 20f
+
+        docItems.forEachIndexed { itemIdx, (docTitle, elements) ->
+            if (itemIdx > 0) {
+                drawHeaderFooter(canvas, pageNum)
+                pdfDocument.finishPage(page)
+                pageNum++
+                pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNum).create()
+                page = pdfDocument.startPage(pageInfo)
+                canvas = page.canvas
+                yPos = margin + 20f
+            }
+
+            checkAndNextPage(50f)
+            canvas.drawText("${itemIdx + 1}. $docTitle", margin, yPos + h1Paint.textSize, h1Paint)
+            yPos += h1Paint.textSize + 10f
+            canvas.drawLine(margin, yPos, pageWidth - margin, yPos, linePaint)
+            yPos += 16f
+
+            for (elem in elements) {
+                when (elem) {
+                    is MarkdownElement.Heading -> {
+                        val p = when (elem.level) {
+                            1 -> h2Paint
+                            2 -> h3Paint
+                            else -> h3Paint
+                        }
+                        val hSpacing = p.textSize * 1.6f
+                        checkAndNextPage(hSpacing + 10f)
+                        canvas.drawText(elem.text, margin, yPos + p.textSize, p)
+                        yPos += hSpacing + 12f
+                    }
+
+                    is MarkdownElement.Paragraph -> {
+                        val lines = wrapText(elem.text, bodyPaint, contentWidth)
+                        val lineH = config.baseFontSize * 1.4f
+                        checkAndNextPage(lines.size * lineH + 10f)
+
+                        lines.forEach { lineText ->
+                            canvas.drawText(lineText, margin, yPos, bodyPaint)
+                            yPos += lineH
+                        }
+                        yPos += 8f
+                    }
+
+                    is MarkdownElement.CodeBlock -> {
+                        val codeLines = elem.code.lines()
+                        val lineH = config.baseFontSize * 1.3f
+                        val boxH = (codeLines.size * lineH) + 16f
+
+                        checkAndNextPage(boxH + 10f)
+
+                        val rect = RectF(margin, yPos, margin + contentWidth, yPos + boxH)
+                        canvas.drawRoundRect(rect, 8f, 8f, bgBoxPaint)
+
+                        var codeY = yPos + lineH + 4f
+                        codeLines.forEach { cLine ->
+                            canvas.drawText(cLine, margin + 12f, codeY, codePaint)
+                            codeY += lineH
+                        }
+
+                        yPos += boxH + 12f
+                    }
+
+                    is MarkdownElement.MermaidBlock -> {
+                        val diagramH = 180f
+                        checkAndNextPage(diagramH + 20f)
+
+                        val rect = RectF(margin, yPos, margin + contentWidth, yPos + diagramH)
+                        canvas.drawRoundRect(rect, 10f, 10f, bgBoxPaint)
+                        canvas.drawRoundRect(rect, 10f, 10f, linePaint)
+
+                        drawMermaidOnCanvas(canvas, rect, elem.diagramData, primaryColor)
+
+                        yPos += diagramH + 16f
+                    }
+
+                    is MarkdownElement.ListItem -> {
+                        val prefix = if (elem.isOrdered) "${elem.itemNumber}. " else "• "
+                        val indent = margin + (elem.indentLevel * 15f)
+                        val lines = wrapText("$prefix${elem.text}", bodyPaint, contentWidth - (elem.indentLevel * 15f))
+                        val lineH = config.baseFontSize * 1.4f
+
+                        checkAndNextPage(lines.size * lineH + 4f)
+
+                        lines.forEach { lineText ->
+                            canvas.drawText(lineText, indent, yPos, bodyPaint)
+                            yPos += lineH
+                        }
+                        yPos += 4f
+                    }
+
+                    is MarkdownElement.Blockquote -> {
+                        val lines = wrapText(elem.text, italicPaint, contentWidth - 20f)
+                        val lineH = config.baseFontSize * 1.4f
+                        val qH = lines.size * lineH + 8f
+
+                        checkAndNextPage(qH + 8f)
+
+                        canvas.drawLine(margin + 4f, yPos, margin + 4f, yPos + qH, quoteBorderPaint)
+
+                        var qY = yPos + config.baseFontSize
+                        lines.forEach { lText ->
+                            canvas.drawText(lText, margin + 16f, qY, italicPaint)
+                            qY += lineH
+                        }
+
+                        yPos += qH + 12f
+                    }
+
+                    is MarkdownElement.HorizontalRule -> {
+                        checkAndNextPage(15f)
+                        canvas.drawLine(margin, yPos, pageWidth - margin, yPos, linePaint)
+                        yPos += 15f
+                    }
+
+                    is MarkdownElement.TableBlock -> {
+                        val cols = elem.headers.size.coerceAtLeast(1)
+                        val colWidth = contentWidth / cols
+                        val rowH = config.baseFontSize * 1.8f
+                        val tableH = (elem.rows.size + 1) * rowH
+
+                        checkAndNextPage(tableH + 15f)
+
+                        val headerRect = RectF(margin, yPos, margin + contentWidth, yPos + rowH)
+                        val headerBg = Paint().apply {
+                            color = Color.parseColor("#E2E8F0")
+                            style = Paint.Style.FILL
+                        }
+                        canvas.drawRect(headerRect, headerBg)
+
+                        elem.headers.forEachIndexed { idx, hText ->
+                            val x = margin + (idx * colWidth) + 8f
+                            canvas.drawText(hText.take(15), x, yPos + (rowH * 0.65f), boldPaint)
+                        }
+
+                        yPos += rowH
+
+                        elem.rows.forEach { row ->
+                            row.forEachIndexed { idx, cellText ->
+                                val x = margin + (idx * colWidth) + 8f
+                                canvas.drawText(cellText.take(15), x, yPos + (rowH * 0.65f), bodyPaint)
+                            }
+                            canvas.drawLine(margin, yPos, margin + contentWidth, yPos, linePaint)
+                            yPos += rowH
+                        }
+
+                        canvas.drawRect(RectF(margin, yPos - tableH, margin + contentWidth, yPos), linePaint)
+                        yPos += 12f
+                    }
+
+                    else -> {}
+                }
+            }
+        }
+
+        drawHeaderFooter(canvas, pageNum)
+        pdfDocument.finishPage(page)
+
+        val outputDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "documents")
+        if (!outputDir.exists()) outputDir.mkdirs()
+
+        val sanitizedTitle = bundleTitle.replace(Regex("[^a-zA-Z0-9_]"), "_").lowercase()
+        val pdfFile = File(outputDir, "${sanitizedTitle}_${System.currentTimeMillis()}.pdf")
+
+        FileOutputStream(pdfFile).use { out ->
+            pdfDocument.writeTo(out)
+        }
+        pdfDocument.close()
+
+        return pdfFile
+    }
+
     private fun wrapText(text: String, paint: Paint, maxWidth: Float): List<String> {
         val words = text.split(" ")
         val lines = mutableListOf<String>()

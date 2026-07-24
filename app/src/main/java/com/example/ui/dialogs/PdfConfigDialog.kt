@@ -42,19 +42,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.pdf.PdfExportConfig
+import com.example.ui.viewmodel.PdfEngine
 
 @Composable
 fun PdfConfigDialog(
     initialConfig: PdfExportConfig,
+    currentEngine: PdfEngine,
+    onEngineChanged: (PdfEngine) -> Unit,
     onDismiss: () -> Unit,
     onConfirm: (PdfExportConfig) -> Unit
 ) {
     var paperSize by remember { mutableStateOf(initialConfig.paperSize) }
+    var isLandscape by remember { mutableStateOf(initialConfig.isLandscape) }
+    var marginPt by remember { mutableFloatStateOf(initialConfig.marginPt) }
     var selectedColorHex by remember { mutableStateOf(initialConfig.primaryColorHex) }
     var baseFontSize by remember { mutableFloatStateOf(initialConfig.baseFontSize) }
     var author by remember { mutableStateOf(initialConfig.author) }
     var headerText by remember { mutableStateOf(initialConfig.headerText) }
     var footerText by remember { mutableStateOf(initialConfig.footerText) }
+    var engine by remember { mutableStateOf(currentEngine) }
 
     val colorOptions = listOf(
         "#0F172A", // Dark Slate
@@ -84,6 +90,48 @@ fun PdfConfigDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // PDF Engine Selection
+                Column {
+                    Text("PDF Generation Engine", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = engine == PdfEngine.NATIVE_VECTOR,
+                            onClick = {
+                                engine = PdfEngine.NATIVE_VECTOR
+                                onEngineChanged(PdfEngine.NATIVE_VECTOR)
+                            },
+                            label = { Text("Native (PdfDocument)") }
+                        )
+                        FilterChip(
+                            selected = engine == PdfEngine.WEBVIEW_HTML,
+                            onClick = {
+                                engine = PdfEngine.WEBVIEW_HTML
+                                onEngineChanged(PdfEngine.WEBVIEW_HTML)
+                            },
+                            label = { Text("WebView HTML Print") }
+                        )
+                    }
+                }
+
+                // Page Orientation
+                Column {
+                    Text("Page Orientation", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = !isLandscape,
+                            onClick = { isLandscape = false },
+                            label = { Text("Portrait (Vertical)") }
+                        )
+                        FilterChip(
+                            selected = isLandscape,
+                            onClick = { isLandscape = true },
+                            label = { Text("Landscape (Horizontal)") }
+                        )
+                    }
+                }
+
                 // Paper Size Selection
                 Column {
                     Text("Paper Size", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
@@ -97,6 +145,37 @@ fun PdfConfigDialog(
                             )
                         }
                     }
+                }
+
+                // Page Margins Selection
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Page Margins", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Text("${marginPt.toInt()} pt", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(
+                            "Narrow" to 20f,
+                            "Normal" to 40f,
+                            "Wide" to 60f
+                        ).forEach { (label, pt) ->
+                            FilterChip(
+                                selected = marginPt == pt,
+                                onClick = { marginPt = pt },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+                    Slider(
+                        value = marginPt,
+                        onValueChange = { marginPt = it },
+                        valueRange = 10f..80f,
+                        steps = 13
+                    )
                 }
 
                 // Primary Color Selection
@@ -183,6 +262,8 @@ fun PdfConfigDialog(
                     onConfirm(
                         initialConfig.copy(
                             paperSize = paperSize,
+                            isLandscape = isLandscape,
+                            marginPt = marginPt,
                             primaryColorHex = selectedColorHex,
                             baseFontSize = baseFontSize,
                             author = author,

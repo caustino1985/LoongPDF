@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +21,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -63,6 +67,7 @@ import com.example.ui.components.MarkdownToolbar
 import com.example.ui.components.PdfDocumentPagePreview
 import com.example.ui.dialogs.PdfConfigDialog
 import com.example.ui.viewmodel.DocumentViewModel
+import com.example.ui.viewmodel.PdfEngine
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,6 +79,7 @@ fun EditorAndPreviewScreen(
     val activeDoc by viewModel.activeDocument.collectAsStateWithLifecycle()
     val parsedElements by viewModel.parsedElements.collectAsStateWithLifecycle()
     val pdfConfig by viewModel.pdfConfig.collectAsStateWithLifecycle()
+    val pdfEngine by viewModel.pdfEngine.collectAsStateWithLifecycle()
     val isExporting by viewModel.isExporting.collectAsStateWithLifecycle()
     val lastExportedFile by viewModel.lastExportedFile.collectAsStateWithLifecycle()
 
@@ -84,6 +90,21 @@ fun EditorAndPreviewScreen(
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Editor, 1 = PDF Sheet Preview
     var showConfigDialog by remember { mutableStateOf(false) }
+
+    // SAF Create Document Launcher (Pick folder/file destination)
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportToCustomUri(context, uri) { success ->
+                if (success) {
+                    Toast.makeText(context, "PDF saved to selected destination!", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(context, "Failed to save PDF to selected location", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     // Text field state with selection management
     var editorTextState by remember(activeDoc!!.id) {
@@ -112,6 +133,21 @@ fun EditorAndPreviewScreen(
                         Icon(Icons.Default.Settings, contentDescription = "PDF Page Config")
                     }
 
+                    // Save to custom folder / location via SAF
+                    IconButton(
+                        onClick = {
+                            val defaultName = "${activeDoc!!.title.replace(Regex("[^a-zA-Z0-9_]"), "_").lowercase()}.pdf"
+                            createDocumentLauncher.launch(defaultName)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FolderOpen,
+                            contentDescription = "Select Folder & Save PDF",
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+
+                    // Quick Export to App Dir
                     IconButton(
                         onClick = {
                             viewModel.exportToPdf(context) { file ->
@@ -127,7 +163,7 @@ fun EditorAndPreviewScreen(
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Download,
-                                contentDescription = "Export PDF",
+                                contentDescription = "Quick Export PDF",
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -249,6 +285,8 @@ fun EditorAndPreviewScreen(
     if (showConfigDialog) {
         PdfConfigDialog(
             initialConfig = pdfConfig,
+            currentEngine = pdfEngine,
+            onEngineChanged = { viewModel.setPdfEngine(it) },
             onDismiss = { showConfigDialog = false },
             onConfirm = { updatedConfig ->
                 viewModel.updatePdfConfig(updatedConfig)

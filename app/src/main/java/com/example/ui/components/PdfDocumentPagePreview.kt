@@ -74,7 +74,7 @@ fun PdfDocumentPagePreview(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp)
+                    .padding((config.marginPt * 0.6f).dp.coerceIn(12.dp, 36.dp))
             ) {
                 // Header Line
                 if (config.headerText.isNotEmpty()) {
@@ -88,7 +88,7 @@ fun PdfDocumentPagePreview(
                             color = Color.Gray
                         )
                         Text(
-                            text = config.paperSize,
+                            text = "${config.paperSize} • ${if (config.isLandscape) "Landscape" else "Portrait"}",
                             fontSize = 10.sp,
                             color = Color.Gray,
                             fontWeight = FontWeight.Bold
@@ -118,7 +118,7 @@ fun PdfDocumentPagePreview(
                         color = Color.DarkGray
                     )
                     Text(
-                        text = "Format: ${config.paperSize}",
+                        text = "Format: ${config.paperSize} (${if (config.isLandscape) "Landscape" else "Portrait"}) | ${config.marginPt.toInt()}pt Margin",
                         fontSize = 11.sp,
                         color = Color.DarkGray
                     )

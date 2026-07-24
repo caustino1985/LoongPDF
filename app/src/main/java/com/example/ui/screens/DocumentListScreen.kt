@@ -1,6 +1,12 @@
 package com.example.ui.screens
 
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -21,16 +28,24 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddCard
 import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -77,55 +92,195 @@ fun DocumentListScreen(
     val documents by viewModel.allDocuments.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
+    val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
+    val selectedDocumentIds by viewModel.selectedDocumentIds.collectAsStateWithLifecycle()
+    val isExporting by viewModel.isExporting.collectAsStateWithLifecycle()
 
+    val context = LocalContext.current
     var showNewDocDialog by remember { mutableStateOf(false) }
+    var showBatchDeleteConfirm by remember { mutableStateOf(false) }
 
     val categories = listOf("All", "Technical", "Report", "Resume", "General")
 
+    val createPdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri ->
+        if (uri != null) {
+            val selectedDocsList = documents.filter { selectedDocumentIds.contains(it.id) }
+            viewModel.exportSelectedMergedPdfToUri(context, selectedDocsList, uri) { success ->
+                if (success) {
+                    Toast.makeText(context, "Merged PDF saved successfully!", Toast.LENGTH_SHORT).show()
+                    viewModel.toggleSelectionMode(false)
+                } else {
+                    Toast.makeText(context, "Failed to save merged PDF.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.padding(end = 10.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Description,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(8.dp)
-                            )
+            if (isSelectionMode) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "${selectedDocumentIds.size} Selected",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { viewModel.toggleSelectionMode(false) }) {
+                            Icon(Icons.Default.Close, contentDescription = "Exit Selection Mode")
                         }
+                    },
+                    actions = {
+                        IconButton(onClick = {
+                            if (selectedDocumentIds.size == documents.size) {
+                                viewModel.clearSelection()
+                            } else {
+                                viewModel.selectAllDocuments(documents)
+                            }
+                        }) {
+                            Icon(Icons.Default.SelectAll, contentDescription = "Select All")
+                        }
+                        if (selectedDocumentIds.isNotEmpty()) {
+                            IconButton(onClick = { showBatchDeleteConfirm = true }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Delete Selected",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                )
+            } else {
+                TopAppBar(
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.padding(end = 10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Description,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(8.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = "LoongPDF Library",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Markdown to PDF Engine v2.0",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.toggleSelectionMode(true) }) {
+                            Icon(Icons.Default.Checklist, contentDescription = "Multi-select Documents")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
+            }
+        },
+        bottomBar = {
+            if (isSelectionMode && selectedDocumentIds.isNotEmpty()) {
+                Surface(
+                    tonalElevation = 8.dp,
+                    shadowElevation = 8.dp,
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Column {
                             Text(
-                                text = "LoongPDF Library",
-                                style = MaterialTheme.typography.titleMedium,
+                                text = "${selectedDocumentIds.size} document${if (selectedDocumentIds.size > 1) "s" else ""} selected",
+                                style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Markdown to PDF Engine v2.0",
+                                text = "Export merged PDF bundle",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    val selectedDocsList = documents.filter { selectedDocumentIds.contains(it.id) }
+                                    viewModel.exportSelectedMergedPdf(context, selectedDocsList) { file ->
+                                        if (file != null) {
+                                            PdfShareManager.sharePdf(context, file)
+                                            viewModel.toggleSelectionMode(false)
+                                        } else {
+                                            Toast.makeText(context, "Export failed", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                enabled = !isExporting,
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                            ) {
+                                if (isExporting) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onSecondary
+                                    )
+                                } else {
+                                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Share")
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    createPdfLauncher.launch("Merged_Documents_${selectedDocumentIds.size}_Collection.pdf")
+                                },
+                                enabled = !isExporting,
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            ) {
+                                Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Merge & Save")
+                            }
+                        }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
+                }
+            }
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showNewDocDialog = true },
-                icon = { Icon(Icons.Default.Add, contentDescription = "New Document") },
-                text = { Text("New Document", fontWeight = FontWeight.Bold) },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            )
+            if (!isSelectionMode) {
+                ExtendedFloatingActionButton(
+                    onClick = { showNewDocDialog = true },
+                    icon = { Icon(Icons.Default.Add, contentDescription = "New Document") },
+                    text = { Text("New Document", fontWeight = FontWeight.Bold) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            }
         }
     ) { padding ->
         Column(
@@ -167,7 +322,31 @@ fun DocumentListScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            // Search Active Indicator & Results Counter
+            if (searchQuery.isNotBlank()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Found ${documents.size} matching document${if (documents.size != 1) "s" else ""}",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    TextButton(
+                        onClick = { viewModel.setSearchQuery("") },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text("Clear filter", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Document Cards List
             if (documents.isEmpty()) {
@@ -179,21 +358,27 @@ fun DocumentListScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            imageVector = Icons.Default.Article,
+                            imageVector = Icons.Default.Search,
                             contentDescription = null,
                             modifier = Modifier.padding(bottom = 12.dp),
                             tint = MaterialTheme.colorScheme.outline
                         )
                         Text(
-                            text = "No documents found",
+                            text = if (searchQuery.isBlank()) "No documents found" else "No results for \"$searchQuery\"",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "Tap 'New Document' to create a Markdown document with Mermaid diagrams.",
+                            text = if (searchQuery.isBlank()) "Tap 'New Document' to create a Markdown document with Mermaid diagrams." else "Try adjusting your search terms or selecting 'All' categories.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline
                         )
+                        if (searchQuery.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            TextButton(onClick = { viewModel.setSearchQuery("") }) {
+                                Text("Clear Search Query")
+                            }
+                        }
                     }
                 }
             } else {
@@ -204,6 +389,10 @@ fun DocumentListScreen(
                     items(documents, key = { it.id }) { doc ->
                         DocumentCardItem(
                             document = doc,
+                            searchQuery = searchQuery,
+                            isSelectionMode = isSelectionMode,
+                            isSelected = selectedDocumentIds.contains(doc.id),
+                            onToggleSelect = { viewModel.toggleDocumentSelection(doc.id) },
                             onClick = {
                                 viewModel.selectDocument(doc)
                                 onOpenEditor()
@@ -214,6 +403,29 @@ fun DocumentListScreen(
                 }
             }
         }
+    }
+
+    if (showBatchDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteConfirm = false },
+            title = { Text("Delete Selected Documents?") },
+            text = { Text("Are you sure you want to delete ${selectedDocumentIds.size} selected document(s)? This action cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteSelectedDocuments()
+                        showBatchDeleteConfirm = false
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     if (showNewDocDialog) {
@@ -228,9 +440,14 @@ fun DocumentListScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DocumentCardItem(
     document: DocumentEntity,
+    searchQuery: String = "",
+    isSelectionMode: Boolean = false,
+    isSelected: Boolean = false,
+    onToggleSelect: () -> Unit,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -241,23 +458,68 @@ fun DocumentCardItem(
         SimpleDateFormat("MMM dd, yyyy • HH:mm", Locale.getDefault()).format(Date(document.updatedAt))
     }
 
+    // Snippet preview of content
+    val snippet = remember(document.content, searchQuery) {
+        if (document.content.isBlank()) ""
+        else {
+            val cleanContent = document.content.replace(Regex("[#*`>\\[\\]()]"), "").trim()
+            if (searchQuery.isNotBlank() && cleanContent.contains(searchQuery, ignoreCase = true)) {
+                val index = cleanContent.indexOf(searchQuery, ignoreCase = true)
+                val start = (index - 20).coerceAtLeast(0)
+                val end = (index + searchQuery.length + 40).coerceAtMost(cleanContent.length)
+                "..." + cleanContent.substring(start, end) + "..."
+            } else {
+                cleanContent.take(100) + if (cleanContent.length > 100) "..." else ""
+            }
+        }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .combinedClickable(
+                onClick = {
+                    if (isSelectionMode) {
+                        onToggleSelect()
+                    } else {
+                        onClick()
+                    }
+                },
+                onLongClick = {
+                    onToggleSelect()
+                }
+            ),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+            else MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (isSelectionMode) {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = { onToggleSelect() },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary
+                            ),
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
+
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = Color(try {
@@ -323,6 +585,16 @@ fun DocumentCardItem(
                         )
                     }
                 }
+            }
+
+            if (snippet.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = snippet,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))

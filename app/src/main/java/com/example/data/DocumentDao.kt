@@ -28,6 +28,9 @@ interface DocumentDao {
     @Delete
     suspend fun deleteDocument(document: DocumentEntity)
 
+    @Query("DELETE FROM documents WHERE id IN (:ids)")
+    suspend fun deleteDocumentsByIds(ids: List<Long>)
+
     @Query("SELECT COUNT(*) FROM documents")
     suspend fun getDocumentCount(): Int
 }

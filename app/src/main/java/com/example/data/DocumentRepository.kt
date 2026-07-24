@@ -27,6 +27,10 @@ class DocumentRepository(private val dao: DocumentDao) {
         dao.deleteDocument(document)
     }
 
+    suspend fun deleteDocumentsByIds(ids: List<Long>) {
+        dao.deleteDocumentsByIds(ids)
+    }
+
     private suspend fun ensureDefaultData() {
         if (dao.getDocumentCount() == 0) {
             DefaultTemplates.getInitialDocuments().forEach { doc ->

@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.Color
 
 data class PdfExportConfig(
     val paperSize: String = "A4",
+    val isLandscape: Boolean = false,
     val marginPt: Float = 40f,
     val baseFontSize: Float = 11f,
     val primaryColorHex: String = "#0F172A",
@@ -13,13 +14,14 @@ data class PdfExportConfig(
     val author: String = "LoongPDF Author"
 ) {
     fun getDimensions(): Pair<Int, Int> {
-        return when (paperSize) {
+        val (w, h) = when (paperSize) {
             "A4" -> Pair(595, 842)
             "Letter" -> Pair(612, 792)
             "A3" -> Pair(842, 1191)
             "A5" -> Pair(420, 595)
             else -> Pair(595, 842)
         }
+        return if (isLandscape) Pair(h, w) else Pair(w, h)
     }
 
     fun parsePrimaryColor(): Int {

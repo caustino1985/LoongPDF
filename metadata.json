@@ -1,0 +1,6 @@
+{
+  "name": "LoongPDF",
+  "description": "Markdown & Document to PDF Converter with live preview, custom styling, Mermaid diagram rendering, and local document library.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

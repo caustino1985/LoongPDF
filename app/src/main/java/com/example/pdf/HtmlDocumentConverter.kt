@@ -18,6 +18,7 @@ object HtmlDocumentConverter {
             <head>
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
                 <style>
                     @page {
                         size: ${config.paperSize} ${if (config.isLandscape) "landscape" else "portrait"};
@@ -44,7 +45,8 @@ object HtmlDocumentConverter {
                     th { background-color: #f1f5f9; color: #0f172a; font-weight: bold; }
                     .header-meta { font-size: 0.85em; color: #64748b; margin-bottom: 20px; }
                     .footer-meta { text-align: center; font-size: 0.8em; color: #94a3b8; margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 12px; }
-                    .mermaid-box { background: #f0f9ff; border: 1px solid #bae6fd; padding: 16px; border-radius: 8px; margin: 16px 0; font-family: monospace; }
+                    .mermaid-box { background: #f8fafc; border: 1px solid #bae6fd; padding: 16px; border-radius: 8px; margin: 16px 0; text-align: center; }
+                    .mermaid { display: inline-block; max-width: 100%; }
                 </style>
             </head>
             <body>
@@ -68,7 +70,7 @@ object HtmlDocumentConverter {
                     sb.append("<pre><code>${escapeHtml(elem.code)}</code></pre>\n")
                 }
                 is MarkdownElement.MermaidBlock -> {
-                    sb.append("<div class=\"mermaid-box\"><strong>[Mermaid Diagram]</strong><br/><pre>${escapeHtml(elem.rawCode)}</pre></div>\n")
+                    sb.append("<div class=\"mermaid-box\"><div class=\"mermaid\">${escapeHtml(elem.rawCode)}</div></div>\n")
                 }
                 is MarkdownElement.ListItem -> {
                     val tag = if (elem.isOrdered) "ol" else "ul"
@@ -99,7 +101,16 @@ object HtmlDocumentConverter {
             sb.append("<div class=\"footer-meta\">${escapeHtml(config.footerText)}</div>\n")
         }
 
-        sb.append("</body></html>")
+        sb.append("""
+            <script>
+                try {
+                    if (typeof mermaid !== 'undefined') {
+                        mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+                    }
+                } catch(e) {}
+            </script>
+            </body></html>
+        """.trimIndent())
         return sb.toString()
     }
 
@@ -117,6 +128,7 @@ object HtmlDocumentConverter {
             <head>
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
                 <style>
                     @page {
                         size: ${config.paperSize} ${if (config.isLandscape) "landscape" else "portrait"};
@@ -143,7 +155,8 @@ object HtmlDocumentConverter {
                     th { background-color: #f1f5f9; color: #0f172a; font-weight: bold; }
                     .header-meta { font-size: 0.85em; color: #64748b; margin-bottom: 20px; }
                     .footer-meta { text-align: center; font-size: 0.8em; color: #94a3b8; margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 12px; }
-                    .mermaid-box { background: #f0f9ff; border: 1px solid #bae6fd; padding: 16px; border-radius: 8px; margin: 16px 0; font-family: monospace; }
+                    .mermaid-box { background: #f8fafc; border: 1px solid #bae6fd; padding: 16px; border-radius: 8px; margin: 16px 0; text-align: center; }
+                    .mermaid { display: inline-block; max-width: 100%; }
                     .doc-break { page-break-before: always; margin-top: 32px; padding-top: 16px; border-top: 2px dashed #cbd5e1; }
                 </style>
             </head>
@@ -174,7 +187,7 @@ object HtmlDocumentConverter {
                         sb.append("<pre><code>${escapeHtml(elem.code)}</code></pre>\n")
                     }
                     is MarkdownElement.MermaidBlock -> {
-                        sb.append("<div class=\"mermaid-box\"><strong>[Mermaid Diagram]</strong><br/><pre>${escapeHtml(elem.rawCode)}</pre></div>\n")
+                        sb.append("<div class=\"mermaid-box\"><div class=\"mermaid\">${escapeHtml(elem.rawCode)}</div></div>\n")
                     }
                     is MarkdownElement.ListItem -> {
                         val tag = if (elem.isOrdered) "ol" else "ul"
@@ -206,7 +219,16 @@ object HtmlDocumentConverter {
             sb.append("<div class=\"footer-meta\">${escapeHtml(config.footerText)}</div>\n")
         }
 
-        sb.append("</body></html>")
+        sb.append("""
+            <script>
+                try {
+                    if (typeof mermaid !== 'undefined') {
+                        mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+                    }
+                } catch(e) {}
+            </script>
+            </body></html>
+        """.trimIndent())
         return sb.toString()
     }
 
@@ -218,3 +240,4 @@ object HtmlDocumentConverter {
             .replace("'", "&#39;")
     }
 }
+

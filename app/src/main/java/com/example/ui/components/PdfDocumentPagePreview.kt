@@ -219,7 +219,10 @@ fun RenderElementPreview(elem: MarkdownElement, config: PdfExportConfig) {
         }
 
         is MarkdownElement.MermaidBlock -> {
-            MermaidDiagramComposable(diagramData = elem.diagramData)
+            MermaidDiagramComposable(
+                diagramData = elem.diagramData,
+                rawCode = elem.rawCode
+            )
         }
 
         is MarkdownElement.ListItem -> {

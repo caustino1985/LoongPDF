@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -11,21 +13,28 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,6 +49,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.example.parser.MermaidDiagramData
 import com.example.parser.MermaidEdge
 import com.example.parser.MermaidNode
@@ -48,9 +58,16 @@ import com.example.parser.NodeShape
 @Composable
 fun MermaidDiagramComposable(
     diagramData: MermaidDiagramData,
+    rawCode: String = "",
     modifier: Modifier = Modifier
 ) {
     var selectedInfo by remember { mutableStateOf<String?>(null) }
+    var renderMode by remember { mutableIntStateOf(0) } // 0 = Mermaid.js Web Engine, 1 = Native Vector
+
+    val codeToRender = if (rawCode.isNotBlank()) rawCode else when (diagramData) {
+        is MermaidDiagramData.Generic -> diagramData.rawCode
+        else -> ""
+    }
 
     Card(
         modifier = modifier
@@ -83,8 +100,8 @@ fun MermaidDiagramComposable(
                     Text(
                         text = when (diagramData) {
                             is MermaidDiagramData.Flowchart -> "Mermaid Flowchart"
-                            is MermaidDiagramData.Sequence -> "Mermaid Sequence Diagram"
-                            else -> "Mermaid Diagram"
+                            is MermaidDiagramData.Sequence -> "Mermaid Sequence"
+                            else -> "Mermaid.js Diagram"
                         },
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
@@ -97,7 +114,7 @@ fun MermaidDiagramComposable(
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Text(
-                        text = "Interactive Vector",
+                        text = if (renderMode == 0) "Mermaid.js" else "Native Vector",
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -105,42 +122,72 @@ fun MermaidDiagramComposable(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Diagram Layout Body
-            when (diagramData) {
-                is MermaidDiagramData.Flowchart -> {
-                    FlowchartComposable(
-                        nodes = diagramData.nodes,
-                        edges = diagramData.edges,
-                        onNodeSelect = { selectedInfo = "Node [${it.id}]: ${it.label}" }
-                    )
-                }
-                is MermaidDiagramData.Sequence -> {
-                    SequenceComposable(
-                        participants = diagramData.participants,
-                        messages = diagramData.messages,
-                        onMessageSelect = { selectedInfo = "Message: ${it.text} (${it.fromId} -> ${it.toId})" }
-                    )
-                }
-                is MermaidDiagramData.Generic -> {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp)),
-                        color = MaterialTheme.colorScheme.surface
+            // Render Mode Segmented Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                SingleChoiceSegmentedButtonRow {
+                    SegmentedButton(
+                        selected = renderMode == 0,
+                        onClick = { renderMode = 0 },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
                     ) {
-                        Text(
-                            text = diagramData.rawCode,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(12.dp)
-                        )
+                        Text("Mermaid.js", fontSize = 11.sp)
+                    }
+                    SegmentedButton(
+                        selected = renderMode == 1,
+                        onClick = { renderMode = 1 },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                    ) {
+                        Text("Native Vector", fontSize = 11.sp)
                     }
                 }
             }
 
-            if (selectedInfo != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (renderMode == 0 && codeToRender.isNotBlank()) {
+                // Mermaid.js Official JS Engine via WebView
+                MermaidWebViewRender(rawCode = codeToRender)
+            } else {
+                // Native Compose Vector Renderer Fallback
+                when (diagramData) {
+                    is MermaidDiagramData.Flowchart -> {
+                        FlowchartComposable(
+                            nodes = diagramData.nodes,
+                            edges = diagramData.edges,
+                            onNodeSelect = { selectedInfo = "Node [${it.id}]: ${it.label}" }
+                        )
+                    }
+                    is MermaidDiagramData.Sequence -> {
+                        SequenceComposable(
+                            participants = diagramData.participants,
+                            messages = diagramData.messages,
+                            onMessageSelect = { selectedInfo = "Message: ${it.text} (${it.fromId} -> ${it.toId})" }
+                        )
+                    }
+                    else -> {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp)),
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            Text(
+                                text = codeToRender,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (selectedInfo != null && renderMode == 1) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
                     color = MaterialTheme.colorScheme.secondaryContainer,
@@ -167,6 +214,87 @@ fun MermaidDiagramComposable(
             }
         }
     }
+}
+
+@Composable
+fun MermaidWebViewRender(
+    rawCode: String,
+    modifier: Modifier = Modifier
+) {
+    val cleanCode = remember(rawCode) {
+        rawCode.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&#39;")
+    }
+
+    val htmlContent = remember(cleanCode) {
+        """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8"/>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+            <style>
+                body {
+                    margin: 0;
+                    padding: 12px;
+                    background-color: transparent;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    font-family: system-ui, -apple-system, sans-serif;
+                }
+                .mermaid {
+                    width: 100%;
+                    text-align: center;
+                }
+                svg {
+                    max-width: 100% !important;
+                    height: auto !important;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="mermaid">
+                $cleanCode
+            </div>
+            <script>
+                try {
+                    mermaid.initialize({
+                        startOnLoad: true,
+                        theme: 'neutral',
+                        securityLevel: 'loose'
+                    });
+                } catch(e) {
+                    console.error(e);
+                }
+            </script>
+        </body>
+        </html>
+        """.trimIndent()
+    }
+
+    AndroidView(
+        factory = { context ->
+            WebView(context).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                webViewClient = object : WebViewClient() {}
+                loadDataWithBaseURL("https://cdn.jsdelivr.net", htmlContent, "text/html", "UTF-8", null)
+            }
+        },
+        update = { webView ->
+            webView.loadDataWithBaseURL("https://cdn.jsdelivr.net", htmlContent, "text/html", "UTF-8", null)
+        },
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 180.dp, max = 400.dp)
+            .clip(RoundedCornerShape(8.dp))
+    )
 }
 
 @Composable
